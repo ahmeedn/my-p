@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>لوحة التحكم - نظام إدارة المستأجرين</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+
     <style>
         * {
     margin: 0;
@@ -616,7 +618,99 @@ tbody tr:hover {
   text-align: center;
   margin-top: 20px;
 }
+/* حاوية البحث */
+#searchContainer {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 15px;
+    flex-wrap: wrap;
+    align-items: center;
+    background: #fff;
+    padding: 12px 16px;
+    border-radius: 10px;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.08);
+}
 
+/* قائمة اختيار نوع البحث */
+#searchType {
+    padding: 10px 14px;
+    border-radius: 8px;
+    border: 1.5px solid #d1d5db;
+    font-size: 15px;
+    outline: none;
+    transition: border-color 0.3s;
+}
+#searchType:focus {
+    border-color: #6366f1;
+}
+
+/* مربع إدخال البحث */
+#searchInput {
+    padding: 10px 14px;
+    font-size: 15px;
+    border-radius: 8px;
+    border: 1.5px solid #d1d5db;
+    flex: 1;
+    min-width: 150px;
+    outline: none;
+    transition: border-color 0.3s;
+}
+#searchInput:focus {
+    border-color: #6366f1;
+}
+
+/* أزرار الحالة */
+#statusButtons {
+    display: flex; /* يتم التحكم بالعرض عبر JS */
+    gap: 5px;
+}
+.status-btn {
+    padding: 10px 18px;
+    border: none;
+    border-radius: 8px;
+    font-weight: bold;
+    cursor: pointer;
+    color: white;
+    transition: all 0.3s ease;
+}
+.status-btn[data-value="مدفوع"] {
+    background-color: #10b981;
+}
+.status-btn[data-value="غير مدفوع"] {
+    background-color: #ef4444;
+}
+.status-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 3px 10px rgba(0,0,0,0.15);
+}
+
+/* زر مسح البحث */
+#clearSearch {
+    background-color: #6b7280;
+    color: white;
+    border-radius: 8px;
+    padding: 10px 20px;
+    font-weight: bold;
+    cursor: pointer;
+    border: none;
+    transition: all 0.3s ease;
+}
+#clearSearch:hover {
+    background-color: #4b5563;
+    transform: translateY(-2px);
+    box-shadow: 0 3px 10px rgba(0,0,0,0.15);
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    #searchContainer {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    #searchType, #searchInput, #statusButtons, #clearSearch {
+        width: 100%;
+    }
+}
 .close {
   float: right;
   font-size: 28px;
@@ -649,6 +743,7 @@ tbody tr:hover {
 .close { cursor: pointer; font-size: 22px; }
 #totalall{color: #96a700;}
 #totalundone{color: red;}
+
 /* Responsive */
 @media (max-width: 768px) {
     .container {
@@ -725,8 +820,8 @@ tbody tr:hover {
         </div>
 
         <div class="actions-bar">
-
 <button id="screenshotBtn" class="btn btn-success">📸 التقاط صورة للتقرير</button>
+<button id="downloadCSV" style="margin: 10px;" class="btn btn-success">تحميل word</button>
 
 <div id="detailsModal" class="modal">
   <div class="modal-content report-modal">
@@ -747,7 +842,25 @@ tbody tr:hover {
     <button class="tab-btn active" data-tab="tenants">المستأجرين</button>
     <button class="tab-btn" data-tab="discounts">الخصومات</button>
 </div>
+<div style="display:flex;gap:10px;margin-bottom:15px;flex-wrap:wrap;align-items:center">
 
+<select id="searchType">
+<option value="name">الاسم</option>
+<option value="date">التاريخ</option>
+<option value="amount">المبلغ</option>
+<option value="status">الحالة</option>
+</select>
+
+<input type="text" id="searchInput" placeholder="اكتب للبحث">
+
+<div id="statusButtons" style="display:none;gap:5px;">
+<button class="btn btn-success status-btn" data-value="مدفوع">مدفوع</button>
+<button class="btn btn-danger status-btn" data-value="غير مدفوع">غير مدفوع</button>
+</div>
+
+<button id="clearSearch" class="btn btn-secondary">مسح</button>
+
+</div>
 <!-- المستأجرين -->
 <div id="tenants" class="tab-content active">
     <div class="section-header">
@@ -832,6 +945,7 @@ tbody tr:hover {
 
     <!-- Modal for Add/Edit Tenant -->
     <div id="tenantModal" class="modal">
+        
     <div class="modal-content">
         <div class="modal-header">
             <h3 id="tenantModalTitle">إضافة مستأجر</h3>
@@ -1423,6 +1537,145 @@ document.addEventListener("click", async (e) => {
         console.error(err);
         alert("فشل الحذف");
     }
+});
+<!-- ------------------------ -->
+const searchType = document.getElementById("searchType");
+const searchInput = document.getElementById("searchInput");
+const statusButtons = document.getElementById("statusButtons");
+const statusBtns = document.querySelectorAll(".status-btn");
+const clearSearch = document.getElementById("clearSearch");
+
+// عند تغيير نوع البحث
+searchType.addEventListener("change", () => {
+    if(searchType.value === "status"){
+        searchInput.style.display = "none";
+        statusButtons.style.display = "flex";
+        searchInput.value = ""; // مسح البحث النصي
+        runSearch(""); // إعادة إظهار كل الصفوف
+    } else {
+        searchInput.style.display = "block";
+        statusButtons.style.display = "none";
+        searchInput.value = "";
+        runSearch(""); // إعادة إظهار كل الصفوف
+    }
+});
+
+// فلترة حسب الحالة
+statusBtns.forEach(btn => {
+    btn.onclick = () => {
+        const value = btn.dataset.value.toLowerCase(); // "مدفوع" أو "غير مدفوع"
+        const tenantRows = document.querySelectorAll("#tenantsTable tr");
+
+        tenantRows.forEach(row => {
+            const statusCell = row.children[3]; // عمود الحالة (تأكد إنه رقم العمود صح)
+            if (statusCell) {
+                const statusText = statusCell.innerText.toLowerCase();
+                row.style.display = statusText === value ? "" : "none";
+            }
+        });
+
+        searchInput.value = ""; // مسح أي بحث نصي
+    };
+});
+
+// البحث النصي
+searchInput.addEventListener("input", () => {
+    const value = searchInput.value.toLowerCase();
+    runSearch(value);
+});
+
+// زر مسح البحث/الحالة
+clearSearch.addEventListener("click", () => {
+    searchInput.value = "";
+    searchType.value = "name";
+    searchInput.style.display = "block";
+    statusButtons.style.display = "none";
+    runSearch("");
+});
+
+// دالة الفلترة العامة
+function runSearch(value) {
+    const tenantRows = document.querySelectorAll("#tenantsTable tr");
+    tenantRows.forEach(row => {
+        if (!value) {
+            row.style.display = ""; // عرض كل الصفوف إذا ما في قيمة
+        } else {
+            const rowText = row.innerText.toLowerCase();
+            row.style.display = rowText.includes(value) ? "" : "none";
+        }
+    });
+}
+// ------------------ csv  ---------------
+const downloadBtn = document.getElementById("downloadCSV");
+
+downloadBtn.addEventListener("click", () => {
+    // جمع البيانات
+    const totalAll = document.getElementById("totalall").textContent;
+    const totalIncome = document.getElementById("totalIncome").textContent;
+    const totalUndone = document.getElementById("totalundone").textContent;
+    const totalDiscounts = document.getElementById("totalDiscounts").textContent;
+    const netTotal = document.getElementById("netTotal").textContent;
+
+    const tenantsCount = document.getElementById("tenantsCount").textContent;
+    const tenantsCountDone = document.getElementById("tenantsCountdone").textContent;
+    const tenantsCountUndone = document.getElementById("tenantsCountundone").textContent;
+    const discountsCount = document.getElementById("discountsCount").textContent;
+
+    // جدول المستأجرين
+    let tenantsHTML = `<table border="1" style="border-collapse: collapse; width: 100%;">
+        <tr>
+            <th>الاسم</th>
+            <th>المبلغ</th>
+            <th>التاريخ</th>
+            <th>الحالة</th>
+        </tr>`;
+    document.querySelectorAll("#tenantsTable tr").forEach(row => {
+        tenantsHTML += `<tr>
+            <td>${row.cells[0].textContent}</td>
+            <td>${row.cells[1].textContent}</td>
+            <td>${row.cells[2].textContent}</td>
+            <td>${row.cells[3].textContent}</td>
+        </tr>`;
+    });
+    tenantsHTML += "</table>";
+
+    // جدول الخصومات
+    let discountsHTML = `<table border="1" style="border-collapse: collapse; width: 100%; margin-top:10px;">
+        <tr>
+            <th>الاسم</th>
+            <th>المبلغ</th>
+            <th>التاريخ</th>
+        </tr>`;
+    document.querySelectorAll("#discountsTable tr").forEach(row => {
+        discountsHTML += `<tr>
+            <td>${row.cells[0].textContent}</td>
+            <td>${row.cells[1].textContent}</td>
+            <td>${row.cells[2].textContent}</td>
+        </tr>`;
+    });
+    discountsHTML += "</table>";
+
+    // محتوى الـ Word
+    const htmlContent = `
+        <h1>تقرير المستأجرين والخصومات</h1>
+        <p>إجمالي كل الايجارات: <b>${totalAll}</b></p>
+        <p>إجمالي المدفوع: <b>${totalIncome}</b></p>
+        <p>إجمالي الغير مدفوع: <b>${totalUndone}</b></p>
+        <p>إجمالي الخصومات: <b>${totalDiscounts}</b></p>
+        <p>الصافي: <b>${netTotal}</b></p>
+        <p>عدد المستأجرين: <b>${tenantsCount}</b> | مدفوع: <b>${tenantsCountDone}</b> | غير مدفوع: <b>${tenantsCountUndone}</b></p>
+        <p>عدد الخصومات: <b>${discountsCount}</b></p>
+        <h2>تفاصيل المستأجرين</h2>
+        ${tenantsHTML}
+        <h2>تفاصيل الخصومات</h2>
+        ${discountsHTML}
+    `;
+
+    // تحويل المحتوى لملف Word
+    const blob = new Blob(["\ufeff", htmlContent], {
+        type: "application/msword"
+    });
+    saveAs(blob, "تقرير_المستأجرين.doc");
 });
 </script>
 </body>
